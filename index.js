@@ -1,123 +1,103 @@
-const express = require('express');
-const { InteractionType, InteractionResponseType, verifyKeyMiddleware } = require('discord-interactions');
+const { Client, GatewayIntentBits } = require('discord.js');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-const DISCORD_PUBLIC_KEY = '6607a04756d8ac4ded681a0b11b88c2a6b63f9e8714c0f66e71d882c03bee62f';
+const DISCORD_TOKEN = 'MTQ2NjE5ODkxMDExNTc3NDU5Nw.Gv8Cea.N-Ip842-H-jqLlbVVZ7mlmZBx5QMbb6Zd9jftw';
 const PRESTASHOP_URL = 'https://mafranchise.com/api';
 const PRESTASHOP_API_KEY = 'TU2Y9Z5DBUJBKU266XF7SS9WVUZYPWMF';
 
-app.post('/interactions', verifyKeyMiddleware(DISCORD_PUBLIC_KEY), async (req, res) => {
-  const interaction = req.body;
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
 
-  if (interaction.type === InteractionType.PING) {
-    return res.send({ type: InteractionResponseType.PONG });
-  }
+client.on('ready', () => {
+  console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
+});
 
-  if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-    const { name } = interaction.data;
+client.on('messageCreate', async (message) => {
+  // Ignorer les messages du bot lui-même
+  if (message.author.bot) return;
 
-    if (name === 'stock') {
-      const productId = interaction.data.options[0].value;
+  // Commande !stock
+  if (message.content.startsWith('!stock')) {
+    const args = message.content.split(' ');
+    const productId = args[1];
 
-      try {
-        const auth = Buffer.from(PRESTASHOP_API_KEY + ':').toString('base64');
-        const response = await fetch(
-          `${PRESTASHOP_URL}/stock_availables?filter[id_product]=${productId}&output_format=JSON`,
-          {
-            headers: {
-              'Authorization': `Basic ${auth}`
-            }
-          }
-        );
-
-        const data = await response.json();
-        const stocks = data.stock_availables || [];
-
-        if (stocks.length === 0) {
-          return res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-              content: `❌ Produit #${productId} introuvable`
-            }
-          });
-        }
-
-        const totalStock = stocks.reduce((sum, s) => sum + parseInt(s.quantity || 0), 0);
-
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `📦 **Stock produit #${productId}**\n✅ Quantité disponible : **${totalStock}** unités`
-          }
-        });
-
-      } catch (error) {
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `❌ Erreur : ${error.message}`
-          }
-        });
-      }
+    if (!productId) {
+      return message.reply('❌ Utilisation : `!stock [id_produit]`');
     }
 
-    if (name === 'commandes') {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const auth = Buffer.from(PRESTASHOP_API_KEY + ':').toString('base64');
-        const response = await fetch(
-          `${PRESTASHOP_URL}/orders?filter[date_add]=[${today},${today}]&display=full&output_format=JSON`,
-          {
-            headers: {
-              'Authorization': `Basic ${auth}`
-            }
+    try {
+      const auth = Buffer.from(PRESTASHOP_API_KEY + ':').toString('base64');
+      const response = await fetch(
+        `${PRESTASHOP_URL}/stock_availables?filter[id_product]=${productId}&output_format=JSON`,
+        {
+          headers: {
+            'Authorization': `Basic ${auth}`
           }
-        );
-
-        const data = await response.json();
-        const orders = data.orders || [];
-
-        if (orders.length === 0) {
-          return res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-              content: `📋 Aucune commande aujourd'hui (${today})`
-            }
-          });
         }
+      );
 
-        const totalCA = orders.reduce((sum, o) => sum + parseFloat(o.total_paid || 0), 0);
-        const ordersList = orders.slice(0, 10).map(o =>
-          `• Commande #${o.id} - ${parseFloat(o.total_paid).toFixed(2)}€`
-        ).join('\n');
+      const data = await response.json();
+      const stocks = data.stock_availables || [];
 
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `📋 **Commandes du jour** (${today})\n\n${ordersList}\n\n💰 **Total : ${totalCA.toFixed(2)}€** (${orders.length} commande${orders.length > 1 ? 's' : ''})`
-          }
-        });
-
-      } catch (error) {
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `❌ Erreur : ${error.message}`
-          }
-        });
+      if (stocks.length === 0) {
+        return message.reply(`❌ Produit #${productId} introuvable`);
       }
+
+      const totalStock = stocks.reduce((sum, s) => sum + parseInt(s.quantity || 0), 0);
+      
+      message.reply(`📦 **Stock produit #${productId}**\n✅ Quantité disponible : **${totalStock}** unités`);
+
+    } catch (error) {
+      message.reply(`❌ Erreur : ${error.message}`);
     }
   }
 
-  res.status(400).send('Unknown interaction type');
+  // Commande !commandes
+  if (message.content === '!commandes') {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const auth = Buffer.from(PRESTASHOP_API_KEY + ':').toString('base64');
+      const response = await fetch(
+        `${PRESTASHOP_URL}/orders?filter[date_add]=[${today},${today}]&display=full&output_format=JSON`,
+        {
+          headers: {
+            'Authorization': `Basic ${auth}`
+          }
+        }
+      );
+
+      const data = await response.json();
+      const orders = data.orders || [];
+
+      if (orders.length === 0) {
+        return message.reply(`📋 Aucune commande aujourd'hui (${today})`);
+      }
+
+      const totalCA = orders.reduce((sum, o) => sum + parseFloat(o.total_paid || 0), 0);
+      const ordersList = orders.slice(0, 10).map(o =>
+        `• Commande #${o.id} - ${parseFloat(o.total_paid).toFixed(2)}€`
+      ).join('\n');
+
+      message.reply(`📋 **Commandes du jour** (${today})\n\n${ordersList}\n\n💰 **Total : ${totalCA.toFixed(2)}€** (${orders.length} commande${orders.length > 1 ? 's' : ''})`);
+
+    } catch (error) {
+      message.reply(`❌ Erreur : ${error.message}`);
+    }
+  }
+
+  // Commande !aide
+  if (message.content === '!aide' || message.content === '!help') {
+    message.reply(
+      '**📦 Commandes disponibles :**\n\n' +
+      '`!stock [id_produit]` - Consulter le stock d\'un produit\n' +
+      '`!commandes` - Voir les commandes du jour\n' +
+      '`!aide` - Afficher cette aide'
+    );
+  }
 });
 
-app.get('/', (req, res) => {
-  res.send('Bot Discord PrestaShop is running!');
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+client.login(DISCORD_TOKEN);
