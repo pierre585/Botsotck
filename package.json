@@ -1,0 +1,17 @@
+{
+  "name": "discord-bot-prestashop",
+  "version": "1.0.0",
+  "description": "Bot Discord pour consulter stocks et commandes PrestaShop",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "discord-interactions": "^3.4.0",
+    "node-fetch": "^2.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
